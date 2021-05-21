@@ -1,0 +1,27 @@
+[package]
+name = "pathfinder_rasterize"
+version = "0.1.0"
+authors = ["Sebastian K <s3bk@protonmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+pathfinder_geometry = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_content = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_color = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_gl = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_gpu = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_canvas = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_renderer = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_resources = { git = "https://github.com/s3bk/pathfinder" }
+pdf_font = { git = "https://github.com/pdf-rs/font", package="font" }
+glutin = "*"
+winit = "0.24"
+gl = "*"
+image = "*"
+
+[dev-dependencies]
+image = "*"
+pathfinder_svg = { git = "https://github.com/s3bk/pathfinder" }
+usvg = "*"
