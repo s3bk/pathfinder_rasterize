@@ -37,14 +37,28 @@ pub fn rasterize_scene(mut scene: Scene) -> RgbaImage {
         lib = libloading::Library::new("libEGL.so.1").expect("unable to find libEGL.so.1");
         egl = egl::DynamicInstance::<egl::EGL1_4>::load_required_from(lib).expect("unable to load libEGL.so.1");
     }
-    println!("EGL version is {}", egl.version());
-
+    
     let display = egl.get_display(egl::DEFAULT_DISPLAY).expect("display");
     let (a, b) = egl.initialize(display).expect("init");
 
-    let attrib_list = [egl::SURFACE_TYPE, egl::PBUFFER_BIT, egl::NONE];
+    let attrib_list = [
+        egl::SURFACE_TYPE, egl::PBUFFER_BIT,
+        egl::BLUE_SIZE, 8,
+        egl::GREEN_SIZE, 8,
+        egl::RED_SIZE, 8,
+        egl::DEPTH_SIZE, 8,
+        egl::RENDERABLE_TYPE, egl::OPENGL_BIT,
+        egl::NONE
+    ];
+    
     let config = egl.choose_first_config(display, &attrib_list).unwrap().unwrap();
-    let surface = egl.create_pbuffer_surface(display, config, &[egl::NONE]).unwrap();
+
+    let pbuffer_attrib_list = [
+        egl::WIDTH, size.x(),
+        egl::HEIGHT, size.y(),
+        egl::NONE
+    ];
+    let surface = egl.create_pbuffer_surface(display, config, &pbuffer_attrib_list).unwrap();
 
     egl.bind_api(egl::OPENGL_API).expect("unable to select OpenGL API");
 
@@ -59,15 +73,22 @@ pub fn rasterize_scene(mut scene: Scene) -> RgbaImage {
         RendererLevel::D3D11 => GLVersion::GL4,
     };
 
+    let render_to_texture = false;
 
     let device = GLDevice::new(renderer_gl_version, 0);
-    let tex = device.create_texture(TextureFormat::RGBA8, viewport.size());
-    let fb = device.create_framebuffer(tex);
+
+    let dest = if render_to_texture {
+        let tex = device.create_texture(TextureFormat::RGBA8, viewport.size());
+        let fb = device.create_framebuffer(tex);
+        DestFramebuffer::Other(fb)
+    } else {
+        DestFramebuffer::full_window(size)
+    };
 
     // Create a Pathfinder renderer.
     let render_mode = RendererMode { level: render_level };
     let render_options = RendererOptions {
-        dest:  DestFramebuffer::Other(fb),
+        dest,
         background_color: Some(background),
         show_debug_ui: false,
     };
@@ -83,15 +104,17 @@ pub fn rasterize_scene(mut scene: Scene) -> RgbaImage {
     };
     scene.build_and_render(&mut renderer, options, RayonExecutor);
 
-    let fb = match renderer.options().dest {
-        DestFramebuffer::Other(ref fb) => fb,
-        _ => panic!()
+    let render_target = match renderer.options().dest {
+        DestFramebuffer::Other(ref fb) => RenderTarget::Framebuffer(fb),
+        _=> RenderTarget::Default
     };
-    let texture_data_receiver = renderer.device().read_pixels(&RenderTarget::Framebuffer(fb), viewport);
+    let texture_data_receiver = renderer.device().read_pixels(&render_target, viewport);
     let pixels = match renderer.device().recv_texture_data(&texture_data_receiver) {
         TextureData::U8(pixels) => pixels,
         _ => panic!("Unexpected pixel format for default framebuffer!"),
     };
+
+    egl.terminate(display).unwrap();
 
     RgbaImage::from_raw(viewport.width() as u32, viewport.height() as u32, pixels).unwrap()
 }
