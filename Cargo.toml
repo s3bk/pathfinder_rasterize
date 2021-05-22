@@ -19,7 +19,6 @@ pdf_font = { git = "https://github.com/pdf-rs/font", package="font" }
 gl = "*"
 image = "*"
 khronos-egl = { version = "*", features = ["dynamic"] }
-libloading = "*"
 
 [dev-dependencies]
 image = "*"

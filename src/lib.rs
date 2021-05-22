@@ -2,7 +2,6 @@ use pathfinder_gl::{GLDevice, GLVersion};
 use pathfinder_renderer::{
     concurrent::{
         rayon::RayonExecutor,
-        scene_proxy::SceneProxy
     },
     gpu::{
         options::{DestFramebuffer, RendererOptions, RendererMode, RendererLevel},
@@ -14,114 +13,140 @@ use pathfinder_renderer::{
 use pathfinder_gpu::{Device, TextureData, RenderTarget, TextureFormat};
 use pathfinder_geometry::{
     vector::{Vector2F, Vector2I},
-    rect::{RectF, RectI},
+    rect::{RectI},
 };
 use pathfinder_color::ColorF;
 use pathfinder_resources::embedded::EmbeddedResourceLoader;
 
 use khronos_egl as egl;
 use image::RgbaImage;
-use egl::api::EGL1_2;
+use egl::{DynamicInstance};
 
-pub fn rasterize_scene(mut scene: Scene) -> RgbaImage {
-    let render_level = RendererLevel::D3D9;
-    let background = ColorF::new(0.0, 0.0, 0.0, 0.0);
-    let resource_loader = EmbeddedResourceLoader::new();
-    let size = scene.view_box().size().ceil().to_i32();
-    let viewport = RectI::new(Vector2I::zero(), size);
+pub struct Rasterizer {
+    egl: DynamicInstance::<egl::EGL1_4>,
+    display: egl::Display,
+    renderer: Option<(Renderer<GLDevice>, Vector2I)>,
+}
+impl Rasterizer {
+    pub fn new() -> Self {
+        let egl = unsafe {
+            egl::DynamicInstance::<egl::EGL1_4>::load_required().expect("unable to load libEGL.so.1")
+        };
 
-    let lib;
-    let egl;
+        let display = egl.get_display(egl::DEFAULT_DISPLAY).expect("display");
+        let (major, minor) = egl.initialize(display).expect("init");
+    
+        let attrib_list = [
+            egl::SURFACE_TYPE, egl::PBUFFER_BIT,
+            egl::BLUE_SIZE, 8,
+            egl::GREEN_SIZE, 8,
+            egl::RED_SIZE, 8,
+            egl::DEPTH_SIZE, 8,
+            egl::RENDERABLE_TYPE, egl::OPENGL_BIT,
+            egl::NONE
+        ];
+        
+        let config = egl.choose_first_config(display, &attrib_list).unwrap().unwrap();
+    
+        let pbuffer_attrib_list = [
+            egl::NONE
+        ];
+        let surface = egl.create_pbuffer_surface(display, config, &pbuffer_attrib_list).unwrap();
+    
+        egl.bind_api(egl::OPENGL_API).expect("unable to select OpenGL API");
+    
+        let context = egl.create_context(display, config, None, &[egl::NONE]).unwrap();
+        egl.make_current(display, Some(surface), Some(surface), Some(context)).unwrap();
+    
+        // Setup Open GL.
+        gl::load_with(|name| egl.get_proc_address(name).unwrap() as *const std::ffi::c_void);
+    
 
-    unsafe {
-        lib = libloading::Library::new("libEGL.so.1").expect("unable to find libEGL.so.1");
-        egl = egl::DynamicInstance::<egl::EGL1_4>::load_required_from(lib).expect("unable to load libEGL.so.1");
+        Rasterizer {
+            egl, display,
+            renderer: None,
+        }
     }
+
+    fn renderer_for_size(&mut self, size: Vector2I) -> &mut Renderer<GLDevice> {
+        let (ref mut renderer, ref mut current_size) = *self.renderer.get_or_insert_with(|| {
+            let render_level = RendererLevel::D3D9;
+            let background = ColorF::new(0.0, 0.0, 0.0, 0.0);
+            let resource_loader = EmbeddedResourceLoader::new();
+
+            let renderer_gl_version = match render_level {
+                RendererLevel::D3D9 => GLVersion::GLES3,
+                RendererLevel::D3D11 => GLVersion::GL4,
+            };
+            let render_mode = RendererMode { level: render_level };
     
-    let display = egl.get_display(egl::DEFAULT_DISPLAY).expect("display");
-    let (a, b) = egl.initialize(display).expect("init");
+            let device = GLDevice::new(renderer_gl_version, 0);
 
-    let attrib_list = [
-        egl::SURFACE_TYPE, egl::PBUFFER_BIT,
-        egl::BLUE_SIZE, 8,
-        egl::GREEN_SIZE, 8,
-        egl::RED_SIZE, 8,
-        egl::DEPTH_SIZE, 8,
-        egl::RENDERABLE_TYPE, egl::OPENGL_BIT,
-        egl::NONE
-    ];
-    
-    let config = egl.choose_first_config(display, &attrib_list).unwrap().unwrap();
+            let tex = device.create_texture(TextureFormat::RGBA8, size);
+            let fb = device.create_framebuffer(tex);
+            let dest = DestFramebuffer::Other(fb);
+            let render_options = RendererOptions {
+                dest,
+                background_color: Some(background),
+                show_debug_ui: false,
+            };
+            let renderer = Renderer::new(device,
+                &resource_loader,
+                render_mode,
+                render_options,
+            );
+            (renderer, size)
+        });
 
-    let pbuffer_attrib_list = [
-        egl::WIDTH, size.x(),
-        egl::HEIGHT, size.y(),
-        egl::NONE
-    ];
-    let surface = egl.create_pbuffer_surface(display, config, &pbuffer_attrib_list).unwrap();
+        if size != *current_size {
+            let tex = renderer.device().create_texture(TextureFormat::RGBA8, size);
+            let fb = renderer.device().create_framebuffer(tex);
+            let dest = DestFramebuffer::Other(fb);
+            renderer.options_mut().dest = dest;
+            *current_size = size;
+        }
 
-    egl.bind_api(egl::OPENGL_API).expect("unable to select OpenGL API");
+        renderer
+    }
 
-    let context = egl.create_context(display, config, None, &[egl::NONE]).unwrap();
-    egl.make_current(display, Some(surface), Some(surface), Some(context)).unwrap();
+    pub fn rasterize(&mut self, mut scene: Scene) -> RgbaImage {
+        let size = scene.view_box().size().ceil().to_i32();
 
-    // Setup Open GL.
-    gl::load_with(|name| egl.get_proc_address(name).unwrap() as *const std::ffi::c_void);
+        let renderer = self.renderer_for_size(size);
+        
+        let options = BuildOptions {
+            transform: RenderTransform::default(),
+            dilation: Vector2F::default(),
+            subpixel_aa_enabled: false
+        };
 
-    let renderer_gl_version = match render_level {
-        RendererLevel::D3D9 => GLVersion::GLES3,
-        RendererLevel::D3D11 => GLVersion::GL4,
-    };
+        scene.build_and_render(renderer, options, RayonExecutor);
 
-    let render_to_texture = false;
+        let render_target = match renderer.options().dest {
+            DestFramebuffer::Other(ref fb) => RenderTarget::Framebuffer(fb),
+            _=> panic!()
+        };
+        let texture_data_receiver = renderer.device().read_pixels(&render_target, RectI::new(Vector2I::zero(), size));
+        let pixels = match renderer.device().recv_texture_data(&texture_data_receiver) {
+            TextureData::U8(pixels) => pixels,
+            _ => panic!("Unexpected pixel format for default framebuffer!"),
+        };
 
-    let device = GLDevice::new(renderer_gl_version, 0);
+        RgbaImage::from_raw(size.x() as u32, size.y() as u32, pixels).unwrap()
+    }
+}
 
-    let dest = if render_to_texture {
-        let tex = device.create_texture(TextureFormat::RGBA8, viewport.size());
-        let fb = device.create_framebuffer(tex);
-        DestFramebuffer::Other(fb)
-    } else {
-        DestFramebuffer::full_window(size)
-    };
-
-    // Create a Pathfinder renderer.
-    let render_mode = RendererMode { level: render_level };
-    let render_options = RendererOptions {
-        dest,
-        background_color: Some(background),
-        show_debug_ui: false,
-    };
-    let mut renderer = Renderer::new(device,
-        &resource_loader,
-        render_mode,
-        render_options,
-    );
-    let options = BuildOptions {
-        transform: RenderTransform::default(),
-        dilation: Vector2F::default(),
-        subpixel_aa_enabled: false
-    };
-    scene.build_and_render(&mut renderer, options, RayonExecutor);
-
-    let render_target = match renderer.options().dest {
-        DestFramebuffer::Other(ref fb) => RenderTarget::Framebuffer(fb),
-        _=> RenderTarget::Default
-    };
-    let texture_data_receiver = renderer.device().read_pixels(&render_target, viewport);
-    let pixels = match renderer.device().recv_texture_data(&texture_data_receiver) {
-        TextureData::U8(pixels) => pixels,
-        _ => panic!("Unexpected pixel format for default framebuffer!"),
-    };
-
-    egl.terminate(display).unwrap();
-
-    RgbaImage::from_raw(viewport.width() as u32, viewport.height() as u32, pixels).unwrap()
+impl Drop for Rasterizer {
+    fn drop(&mut self) {
+        self.egl.terminate(self.display).unwrap();
+    }
 }
 
 #[test]
 fn test_render() {
+    use pathfinder_geometry::rect::RectF;
+
     let mut scene = Scene::new();
     scene.set_view_box(RectF::new(Vector2F::zero(), Vector2F::new(100., 100.)));
-    rasterize_scene(scene);
+    Rasterizer::new().rasterize(scene);
 }
