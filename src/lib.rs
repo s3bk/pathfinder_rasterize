@@ -20,20 +20,19 @@ use pathfinder_resources::embedded::EmbeddedResourceLoader;
 
 use khronos_egl as egl;
 use image::RgbaImage;
-use egl::{DynamicInstance};
+use egl::{Instance};
 
 pub struct Rasterizer {
-    egl: DynamicInstance::<egl::EGL1_4>,
+    egl: Instance<egl::Static>,
     display: egl::Display,
     surface: egl::Surface,
     context: egl::Context,
     renderer: Option<(Renderer<GLDevice>, Vector2I)>,
 }
+
 impl Rasterizer {
     pub fn new() -> Self {
-        let egl = unsafe {
-            egl::DynamicInstance::<egl::EGL1_4>::load_required().expect("unable to load libEGL.so.1")
-        };
+        let egl = egl::Instance::new(egl::Static);
 
         let display = egl.get_display(egl::DEFAULT_DISPLAY).expect("display");
         let (major, minor) = egl.initialize(display).expect("init");
