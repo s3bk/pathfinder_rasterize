@@ -25,6 +25,8 @@ use egl::{DynamicInstance};
 pub struct Rasterizer {
     egl: DynamicInstance::<egl::EGL1_4>,
     display: egl::Display,
+    surface: egl::Surface,
+    context: egl::Context,
     renderer: Option<(Renderer<GLDevice>, Vector2I)>,
 }
 impl Rasterizer {
@@ -63,9 +65,18 @@ impl Rasterizer {
     
 
         Rasterizer {
-            egl, display,
+            egl, display, surface, context,
             renderer: None,
         }
+    }
+
+    fn make_current(&self) {
+        self.egl.make_current(
+            self.display,
+            Some(self.surface),
+            Some(self.surface),
+            Some(self.context)
+        ).unwrap();
     }
 
     fn renderer_for_size(&mut self, size: Vector2I) -> &mut Renderer<GLDevice> {
@@ -110,6 +121,8 @@ impl Rasterizer {
     }
 
     pub fn rasterize(&mut self, mut scene: Scene) -> RgbaImage {
+        self.make_current();
+        
         let size = scene.view_box().size().ceil().to_i32();
 
         let renderer = self.renderer_for_size(size);
