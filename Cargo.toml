@@ -5,14 +5,14 @@ authors = ["Sebastian K <s3bk@protonmail.com>"]
 edition = "2018"
 
 [dependencies]
-pathfinder_geometry = { git = "https://github.com/s3bk/pathfinder" }
-pathfinder_content = { git = "https://github.com/s3bk/pathfinder" }
-pathfinder_color = { git = "https://github.com/s3bk/pathfinder" }
-pathfinder_gl = { git = "https://github.com/s3bk/pathfinder" }
-pathfinder_gpu = { git = "https://github.com/s3bk/pathfinder" }
-pathfinder_canvas = { git = "https://github.com/s3bk/pathfinder" }
-pathfinder_renderer = { git = "https://github.com/s3bk/pathfinder" }
-pathfinder_resources = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_geometry = { git = "https://github.com/servo/pathfinder" }
+pathfinder_content = { git = "https://github.com/servo/pathfinder" }
+pathfinder_color = { git = "https://github.com/servo/pathfinder" }
+pathfinder_gl = { git = "https://github.com/servo/pathfinder" }
+pathfinder_gpu = { git = "https://github.com/servo/pathfinder" }
+pathfinder_canvas = { git = "https://github.com/servo/pathfinder" }
+pathfinder_renderer = { git = "https://github.com/servo/pathfinder" }
+pathfinder_resources = { git = "https://github.com/servo/pathfinder" }
 pdf_font = { git = "https://github.com/pdf-rs/font", package="font" }
 gl = "*"
 image = "*"
@@ -20,5 +20,5 @@ khronos-egl = { version = "*", features = ["static"] }
 
 [dev-dependencies]
 image = "*"
-pathfinder_svg = { git = "https://github.com/s3bk/pathfinder" }
+pathfinder_svg = { git = "https://github.com/servo/pathfinder" }
 usvg = "*"

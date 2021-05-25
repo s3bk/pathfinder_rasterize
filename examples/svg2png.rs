@@ -1,6 +1,6 @@
 use pathfinder_svg::SVGScene;
 use usvg::{Tree, Options};
-use pathfinder_rasterize::rasterize_scene;
+use pathfinder_rasterize::Rasterizer;
 
 fn main() {
     let mut args = std::env::args();
@@ -13,6 +13,6 @@ fn main() {
     let tree = Tree::from_data(&input_data, &Options::default()).unwrap();
     let scene = SVGScene::from_tree(&tree).scene;
 
-    let image = rasterize_scene(scene);
+    let image = Rasterizer::new().rasterize(scene);
     image.save(&output).unwrap();
 }
