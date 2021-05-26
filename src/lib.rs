@@ -81,7 +81,6 @@ impl Rasterizer {
     fn renderer_for_size(&mut self, size: Vector2I) -> &mut Renderer<GLDevice> {
         let (ref mut renderer, ref mut current_size) = *self.renderer.get_or_insert_with(|| {
             let render_level = RendererLevel::D3D9;
-            let background = ColorF::new(0.0, 0.0, 0.0, 0.0);
             let resource_loader = EmbeddedResourceLoader::new();
 
             let renderer_gl_version = match render_level {
@@ -97,7 +96,7 @@ impl Rasterizer {
             let dest = DestFramebuffer::Other(fb);
             let render_options = RendererOptions {
                 dest,
-                background_color: Some(background),
+                background_color: None,
                 show_debug_ui: false,
             };
             let renderer = Renderer::new(device,
@@ -119,12 +118,13 @@ impl Rasterizer {
         renderer
     }
 
-    pub fn rasterize(&mut self, mut scene: Scene) -> RgbaImage {
+    pub fn rasterize(&mut self, mut scene: Scene, background: Option<ColorF>) -> RgbaImage {
         self.make_current();
         
         let size = scene.view_box().size().ceil().to_i32();
 
         let renderer = self.renderer_for_size(size);
+        renderer.options_mut().background_color = background;
         
         let options = BuildOptions {
             transform: RenderTransform::default(),
@@ -160,5 +160,5 @@ fn test_render() {
 
     let mut scene = Scene::new();
     scene.set_view_box(RectF::new(Vector2F::zero(), Vector2F::new(100., 100.)));
-    Rasterizer::new().rasterize(scene);
+    Rasterizer::new().rasterize(scene, None);
 }

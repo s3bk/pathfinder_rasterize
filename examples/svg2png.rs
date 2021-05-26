@@ -13,6 +13,6 @@ fn main() {
     let tree = Tree::from_data(&input_data, &Options::default()).unwrap();
     let scene = SVGScene::from_tree(&tree).scene;
 
-    let image = Rasterizer::new().rasterize(scene);
+    let image = Rasterizer::new().rasterize(scene, None);
     image.save(&output).unwrap();
 }
