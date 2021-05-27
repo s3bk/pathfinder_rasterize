@@ -28,10 +28,14 @@ pub struct Rasterizer {
     surface: egl::Surface,
     context: egl::Context,
     renderer: Option<(Renderer<GLDevice>, Vector2I)>,
+    render_level: RendererLevel,
 }
 
 impl Rasterizer {
     pub fn new() -> Self {
+        Rasterizer::new_with_level(RendererLevel::D3D9)
+    }
+    pub fn new_with_level(render_level: RendererLevel) -> Self {
         let egl = egl::Instance::new(egl::Static);
 
         let display = egl.get_display(egl::DEFAULT_DISPLAY).expect("display");
@@ -65,7 +69,7 @@ impl Rasterizer {
 
         Rasterizer {
             egl, display, surface, context,
-            renderer: None,
+            renderer: None, render_level,
         }
     }
 
@@ -79,15 +83,14 @@ impl Rasterizer {
     }
 
     fn renderer_for_size(&mut self, size: Vector2I) -> &mut Renderer<GLDevice> {
+        let level = self.render_level;
         let (ref mut renderer, ref mut current_size) = *self.renderer.get_or_insert_with(|| {
-            let render_level = RendererLevel::D3D9;
             let resource_loader = EmbeddedResourceLoader::new();
 
-            let renderer_gl_version = match render_level {
+            let renderer_gl_version = match level {
                 RendererLevel::D3D9 => GLVersion::GLES3,
                 RendererLevel::D3D11 => GLVersion::GL4,
             };
-            let render_mode = RendererMode { level: render_level };
     
             let device = GLDevice::new(renderer_gl_version, 0);
 
@@ -101,7 +104,7 @@ impl Rasterizer {
             };
             let renderer = Renderer::new(device,
                 &resource_loader,
-                render_mode,
+                RendererMode { level },
                 render_options,
             );
             (renderer, size)
