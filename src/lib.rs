@@ -13,7 +13,8 @@ use pathfinder_renderer::{
 use pathfinder_gpu::{Device, TextureData, RenderTarget, TextureFormat};
 use pathfinder_geometry::{
     vector::{Vector2F, Vector2I},
-    rect::{RectI},
+    rect::{RectI, RectF},
+    transform2d::Transform2F,
 };
 use pathfinder_color::ColorF;
 use pathfinder_resources::embedded::EmbeddedResourceLoader;
@@ -124,13 +125,16 @@ impl Rasterizer {
     pub fn rasterize(&mut self, mut scene: Scene, background: Option<ColorF>) -> RgbaImage {
         self.make_current();
         
-        let size = scene.view_box().size().ceil().to_i32();
+        let view_box = dbg!(scene.view_box());
+        let size = view_box.size().ceil().to_i32();
+        let transform = Transform2F::from_translation(-view_box.origin());
 
         let renderer = self.renderer_for_size(size);
         renderer.options_mut().background_color = background;
-        
+        scene.set_view_box(RectF::new(Vector2F::zero(), view_box.size()));
+
         let options = BuildOptions {
-            transform: RenderTransform::default(),
+            transform: RenderTransform::Transform2D(transform),
             dilation: Vector2F::default(),
             subpixel_aa_enabled: false
         };
