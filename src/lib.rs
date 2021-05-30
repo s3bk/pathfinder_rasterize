@@ -85,6 +85,7 @@ impl Rasterizer {
 
     fn renderer_for_size(&mut self, size: Vector2I) -> &mut Renderer<GLDevice> {
         let level = self.render_level;
+        let size = Vector2I::new((size.x() + 15) & !15, (size.y() + 15) & !15);
         let (ref mut renderer, ref mut current_size) = *self.renderer.get_or_insert_with(|| {
             let resource_loader = EmbeddedResourceLoader::new();
 
