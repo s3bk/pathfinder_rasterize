@@ -55,6 +55,8 @@ impl Rasterizer {
         let config = egl.choose_first_config(display, &attrib_list).unwrap().unwrap();
     
         let pbuffer_attrib_list = [
+            egl::WIDTH, 1,
+            egl::HEIGHT, 1,
             egl::NONE
         ];
         let surface = egl.create_pbuffer_surface(display, config, &pbuffer_attrib_list).unwrap();
